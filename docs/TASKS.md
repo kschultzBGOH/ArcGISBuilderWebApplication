@@ -4,40 +4,52 @@ One task = one builder session. Check off as work lands.
 
 ## Phase 0 — Decisions & scaffolding
 
-- [x] CLAUDE.md brain doc + output schema contract
-- [x] Decisions: Laravel, Portal 12.0, Portal OAuth app (org creating), single-group access
-- [ ] **User:** register the OAuth app in Portal 12.0 (redirect URI `{APP_URL}/auth/callback`), note the group id
-- [ ] Scaffold Laravel app (PHP 8.4) + React/TS via Vite in `resources/js`, Calcite Components, `config/runner.php`, `.env.example` with all vars from CLAUDE.md
-- [ ] `runner_configs` filesystem disk bound to `CONFIG_ROOT`
-- [ ] Test setup (Pest/PHPUnit, `Http::fake()` Portal fixtures for 12.0 responses)
-- [ ] `docs/DEPLOYMENT.md`: server requirements, share mount + permissions, OAuth app setup
+- [x] CLAUDE.md, schema contract, backlog
+- [x] Decisions: Laravel, Portal 12.0, OAuth app, single-group access, 7-step wizard, PHP hooks as reviewed code
+- [ ] **User:** register OAuth app in Portal 12.0 (redirect `{APP_URL}/auth/callback`); provide group id
+- [ ] Scaffold Laravel (PHP 8.4) + React/TS/Vite in `resources/js`, Calcite Components, `config/runner.php`, `.env.example`
+- [ ] `runner_configs` disk + `ConfigStore` (drafts + live, atomic writes)
+- [ ] Test setup: Pest, `Http::fake()` Portal 12.0 fixtures
+- [ ] `docs/DEPLOYMENT.md`
 
-## Phase 1 — Auth & Portal introspection
+## Phase 1 — Foundation
 
-- [ ] `PortalClient` service: authorize URL, code exchange, refresh, `community/self`
-- [ ] `/auth/login`, `/auth/callback`, `/auth/logout`; tokens in server session only
-- [ ] `EnsurePortalGroupMember` middleware (`PORTAL_ALLOWED_GROUP_ID`); not-authorized page
-- [ ] `GET /api/me`
-- [ ] `GET /api/webmaps` (search webmaps the user can access)
-- [ ] SPA: login screen + webmap selector
+- [ ] `PortalClient`: authorize URL, code exchange, refresh, `community/self`
+- [ ] `/auth/*` routes; tokens in server session only
+- [ ] `EnsurePortalGroupMember` middleware + not-authorized page
+- [ ] Wizard shell: step navigation, draft autosave/load
+- [ ] Step 1: webmap search + select
 
-## Phase 2 — Layer inspection & field config UI
+## Phase 2 — Steps 2–4
 
-- [ ] `GET /api/webmaps/{id}/layers` — flatten operational layers + tables (incl. group layers)
-- [ ] `GET /api/layers/schema?url=` — fields, domains, capabilities
-- [ ] Frontend: layer list with enable toggle + drag reorder
-- [ ] Frontend: visible fields picker (ordered)
-- [ ] Frontend: editable fields picker (only service-editable, no system fields)
-- [ ] Frontend: label overrides, sort, page size
+- [ ] Layer detection: flatten operational layers + tables (incl. group layers), fetch each layer's schema
+- [ ] Step 2: layer + field selection UI (field types shown)
+- [ ] Step 3: page checkboxes, disabled by capabilities
+- [ ] `InputTypes` registry (key → valid field types, default per field type)
+- [ ] Step 4: input type picker per field, filtered by field type; system fields forced to `readonly`
 
-## Phase 3 — Save & serve
+## Phase 3 — Steps 5–6
 
-- [ ] `PUT /api/configs/{webmapId}` — validate against schema, write to `CONFIG_ROOT` atomically (temp file + rename)
-- [ ] `GET /api/configs/{webmapId}` — public read, CORS for ExB origin
-- [ ] Load existing config when reopening a webmap (edit, not recreate)
-- [ ] Frontend: JSON preview + save
+- [ ] Step 5: List layout (column order, sort, page size)
+- [ ] Step 5: form designer — sections, drag reorder sections/fields, per page (Add/Edit/View)
+- [ ] Step 6: CSS editor with live preview
 
-## Phase 4 — Polish
+## Phase 4 — Publish & runtime
 
-- [ ] Config drift warning: fields/layers in saved config no longer in service
+- [ ] Review & Publish: validate draft against schema rules, write live file
+- [ ] `VerifyPortalToken` middleware (widget users' Bearer token)
+- [ ] `GET /api/runtime/configs/{webmapId}` + CORS
+- [ ] `EditGate` + `POST /api/runtime/edits/{webmapId}/{layerId}` → `applyEdits` as the user
+
+## Phase 5 — Step 7
+
+- [ ] **Spike:** does Experience Builder's CSP allow running handler code from text (`new Function`)? Decide the fallback before building the JS editor
+- [ ] Step 7: JS handler editor per layer/event
+- [ ] `LayerHook` interface, `HookRejected`, `HookRegistry` discovery of `app/Hooks/*`
+- [ ] Run hooks around `applyEdits` in the edit endpoint; step 7 hook picker
+- [ ] Example hook + tests
+
+## Phase 6 — Polish
+
+- [ ] Drift warning: saved layers/fields no longer in the service
 - [ ] Error handling, session timeout UX

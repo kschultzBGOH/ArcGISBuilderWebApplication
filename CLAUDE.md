@@ -2,149 +2,193 @@
 
 ## What this project is
 
-ArcGIS Builder Web Application is a **Laravel (PHP 8.4) + React web application** that lets you visually
-configure which ArcGIS feature layers and tables should be exposed in the ArcGIS Runner
-widget (the paired Experience Builder widget), and what fields should be visible/editable
-for each layer.
+A **Laravel (PHP 8.4) + React** web app, in the spirit of PHPRunner, for building
+ArcGIS Runner apps without code. You walk through a 7-step wizard against a
+Portal 12.0 webmap, and the result is one JSON config per webmap. The paired
+**ArcGIS Runner** Experience Builder widget (`kschultzBGOH/ArcGISRunner`) loads
+that config and renders the list/add/edit/view/delete pages it describes.
 
-Workflow:
-1. You log in with your ArcGIS Portal credentials (only members of the designated
-   Portal group may use the site)
-2. The site introspects your Portal and lists available webmaps, feature services, and
-   feature/table layers within them
-3. For each layer you want to expose in Runner, you configure:
-   - Which fields are displayed in the list view (and in what order)
-   - Which fields are editable in the add/edit form
-   - Custom field labels/aliases
-   - Default sort field/order and page size
-4. The site generates a **JSON config file** and stores it on your org's network drive
-5. The paired ArcGIS Runner widget loads that JSON file and uses it to drive its CRUD UI
+Only members of one designated Portal group may sign in.
 
-This builder app is the **single source of truth** for layer/field configuration. The widget
-simply reads and obeys the JSON — it does not have a settings panel of its own.
+This app does two jobs:
+1. **Builder** — the wizard UI and the config files it produces.
+2. **Runtime backend for the widget** — serves configs and is the single path
+   for all widget *writes* (add/update/delete), so server-side PHP hooks and
+   config rules are enforced on every edit.
+
+## The wizard
+
+Each step is a page in the SPA. Progress autosaves to a server-side **draft**;
+**Publish** (end of step 7) writes the live config the widget reads.
+
+1. **Select webmap** — search the webmaps the signed-in user can access in Portal.
+2. **Layers & fields** — auto-detect every feature layer and table in the webmap
+   (group layers flattened). Show each one's fields with their field types.
+   Select which layers and which fields to include.
+3. **Pages** — for each selected layer, checkboxes: **List**, **Add**, **Edit**,
+   **View**, **Delete**. A box is disabled when the service doesn't support it
+   (Add needs `supportsAdd`, Edit needs `supportsUpdate`, Delete needs `supportsDelete`).
+4. **Input types** — for each field, choose how it's entered/displayed. Choices
+   are filtered to what's valid for the field type (see "Input types").
+5. **Designer** — per layer, per page: List page = ordered columns (plus default
+   sort and page size); Add/Edit/View pages = fields grouped into titled
+   **sections**, drag to reorder sections and the fields inside them.
+6. **Custom CSS** — one stylesheet per config, applied only inside the widget.
+7. **Custom code** — per layer:
+   - **JavaScript** event handlers, written in the builder, run by the widget in
+     the browser (see "Custom JavaScript").
+   - **PHP hook** — choose one hook class from the code that's deployed. The PHP
+     itself is never typed into the builder (see "PHP hooks").
+
+Then **Review & Publish**: show the config as JSON and publish it.
 
 ## Locked-in architecture decisions
 
-- **Backend**: Laravel (current major release supporting PHP 8.4) on PHP 8.4.25, on the
-  org's internal servers. Mostly Portal API proxying and file I/O, no heavy business logic.
-- **Frontend**: React + TypeScript single-page app living in Laravel's `resources/js`,
-  built with Vite (`laravel-vite-plugin`), and Calcite Components for UI. It is served
-  by Laravel from the same origin, so one deploy and plain session cookies with no
-  token handling in the browser. The SPA never calls Portal or feature services
-  directly; everything goes through Laravel `/api` routes.
-- **Portal**: ArcGIS Enterprise **12.0**. All Portal calls go through one `PortalClient`
-  service (`{PORTAL_URL}/sharing/rest/...`) so version-specific quirks stay in one place.
-- **Authentication**: Portal OAuth2 authorization-code flow using an OAuth app the
-  org registers in Portal (client id + secret in `.env`; redirect URI
-  `{APP_URL}/auth/callback`). Laravel holds the Portal access/refresh tokens in the
-  server-side session, and they never reach the browser.
-- **Authorization**: only members of one Portal group may sign in. At login, and
-  again on every save, Laravel checks the user's groups via
-  `/sharing/rest/community/self` against `PORTAL_ALLOWED_GROUP_ID`. Non-members get
-  a clear "not authorized" page and no session.
-- **Config storage**: a dedicated Laravel filesystem disk `runner_configs` whose
-  root is `CONFIG_ROOT` (the mounted network share; the PHP service account needs
-  write access). One file per webmap: `{webmapId}.json`. Writes are atomic
-  (temp file + rename).
-- **Config delivery**: browsers can't read network-drive paths, so the widget never
-  touches the drive. Laravel serves `GET /api/configs/{webmapId}` read-only, with CORS
-  restricted to `RUNNER_ALLOWED_ORIGINS` (the ExB host). The widget's only design-time
-  setting is that URL.
-- **Data flow**:
-  - SPA → Laravel `/api` (webmaps, layers, field metadata, save config)
-  - Laravel → Portal 12.0 REST (as the signed-in user, with their token)
-  - Laravel → network share (read/write JSON)
-  - ExB widget → `GET /api/configs/{webmapId}`
+- **Backend**: Laravel (current major release supporting PHP 8.4) on PHP 8.4.25,
+  on the org's internal servers.
+- **Frontend**: React + TypeScript SPA in `resources/js`, built with Vite
+  (`laravel-vite-plugin`), Calcite Components for UI. Served by Laravel from the
+  same origin, using session cookies. The SPA never calls Portal directly.
+- **Portal**: ArcGIS Enterprise **12.0**. Every Portal/feature-service call goes
+  through `PortalClient` so version quirks live in one place.
+- **Builder authentication**: Portal OAuth2 authorization-code flow with the
+  org's registered OAuth app (redirect URI `{APP_URL}/auth/callback`). Portal
+  tokens stay in the server session and never reach the browser.
+- **Builder authorization**: only members of `PORTAL_ALLOWED_GROUP_ID`, checked at
+  login and again on every save/publish via `/sharing/rest/community/self`.
+- **Widget authentication**: widget users are ordinary Portal users, not
+  necessarily in the builder group. The widget sends the user's own Portal token
+  (`Authorization: Bearer`). Laravel verifies it against Portal and forwards it to
+  the feature service, so service permissions and editor tracking apply to that user.
+- **Config storage**: Laravel disk `runner_configs`, root `CONFIG_ROOT` (the mounted
+  network share). Live configs are `{webmapId}.json`; drafts are
+  `drafts/{webmapId}.json`. Writes are atomic (temp file + rename).
+- **Widget endpoints** (CORS limited to `RUNNER_ALLOWED_ORIGINS`, Portal token required):
+  - `GET /api/runtime/configs/{webmapId}` — the live config
+  - `POST /api/runtime/edits/{webmapId}/{layerId}` — add/update/delete. Laravel
+    rejects anything the config doesn't allow (page disabled, field not
+    selected). It then runs the layer's PHP `before*` hook, calls the feature
+    service `applyEdits` with the user's token, and runs the `after*` hook.
+- **Reads** (List/View queries) go straight from the widget to the feature service
+  through `@arcgis/core`. Only writes go through Laravel.
+
+## Input types
+
+Each input type is a key such as `text`, plus optional `inputOptions`. The
+registry in the builder (`app/Runner/InputTypes.php`) and the widget's
+renderers must use the same keys. New types get added over time; adding one is
+a schema change, so update `docs/CONFIG_OUTPUT_SCHEMA.md` and the widget too.
+
+Starting set:
+
+| Key | Valid for |
+|---|---|
+| `text` | string |
+| `textarea` | string |
+| `number` | integer, small integer, double, single |
+| `date` | date, date-only |
+| `datetime` | date |
+| `dropdown` | any field with a coded-value domain |
+| `readonly` | any field (shown, never editable) |
+
+## Custom JavaScript
+
+Handlers are stored as source text in the config. The widget runs each one as a
+function that receives a `ctx` object (layer, page, feature attributes,
+`setValue`, `cancel(message)`). The event set and `ctx` shape are defined in
+`docs/CONFIG_OUTPUT_SCHEMA.md`.
+
+**Risk:** this code runs in every widget user's browser with their Portal
+session, so anyone in the builder group can run code as other users. Keep the
+group small. Also, Experience Builder's Content-Security-Policy may block
+running code from text. That gets an early spike task before any widget work
+depends on it.
+
+## PHP hooks
+
+Hooks are PHP classes in `app/Hooks/` that implement `App\Runner\LayerHook`
+(`beforeAdd`, `afterAdd`, `beforeUpdate`, `afterUpdate`, `beforeDelete`,
+`afterDelete`). `before*` hooks can change attributes or throw
+`HookRejected($message)`, and that message is shown to the widget user.
+
+Hooks go through git and code review, and are deployed like any other code. The
+builder discovers the deployed hook classes and lets you pick one per layer.
+**The server never runs PHP text that came from a config or the browser.**
 
 ### Environment variables (`.env`)
 
 | Var | Purpose |
 |---|---|
 | `PORTAL_URL` | e.g. `https://gis.example.org/portal` |
-| `PORTAL_OAUTH_CLIENT_ID` / `PORTAL_OAUTH_CLIENT_SECRET` | from the Portal OAuth app registration |
-| `PORTAL_ALLOWED_GROUP_ID` | Portal group whose members may use the site |
-| `CONFIG_ROOT` | mount path of the network share for config JSON |
-| `RUNNER_ALLOWED_ORIGINS` | comma-separated ExB origins allowed to read configs |
+| `PORTAL_OAUTH_CLIENT_ID` / `PORTAL_OAUTH_CLIENT_SECRET` | Portal OAuth app registration |
+| `PORTAL_ALLOWED_GROUP_ID` | group whose members may use the builder |
+| `CONFIG_ROOT` | mount path of the network share |
+| `RUNNER_ALLOWED_ORIGINS` | comma-separated Experience Builder origins allowed to call the runtime endpoints |
 
 ## Repo layout
 
 ```
-/CLAUDE.md                         <- this file (brain doc)
+/CLAUDE.md
 /docs/
-  TASKS.md                         <- living backlog
-  CONFIG_OUTPUT_SCHEMA.md          <- JSON contract with the widget (source of truth)
-  DEPLOYMENT.md                    <- server, network share mount, Portal OAuth app setup
+  TASKS.md                     <- backlog
+  CONFIG_OUTPUT_SCHEMA.md      <- JSON contract with the widget (only definition)
+  DEPLOYMENT.md                <- server, share mount, Portal OAuth app
 /app/
-  Http/
-    Controllers/
-      AuthController.php           <- login redirect, callback, logout
-      WebmapController.php
-      LayerController.php
-      ConfigController.php         <- save (auth) + public read
-    Middleware/
-      EnsurePortalGroupMember.php
+  Http/Controllers/
+    AuthController.php         <- login, callback, logout
+    Builder/                   <- webmaps, layers, drafts, publish (group-gated)
+    Runtime/                   <- configs + edits for the widget (Portal-token-gated)
+  Http/Middleware/
+    EnsurePortalGroupMember.php
+    VerifyPortalToken.php
+  Runner/
+    InputTypes.php             <- input type registry
+    LayerHook.php, HookRejected.php, HookRegistry.php
+    EditGate.php               <- enforces config rules on incoming edits
+  Hooks/                       <- per-layer PHP hooks (reviewed code)
   Services/
-    PortalClient.php               <- all Portal REST calls + token refresh
-    ConfigBuilder.php              <- form input -> RunnerConfig JSON
-    ConfigStore.php                <- runner_configs disk read/atomic write
-/config/runner.php                 <- typed access to the env vars above
-/routes/
-  web.php                          <- /auth/*, SPA catch-all
-  api.php                          <- /api/*
-/resources/js/                     <- React + TS SPA (Vite)
-  pages/        (Login, WebmapSelector, LayerConfigurator, ConfigPreview)
-  components/   (FieldPicker, FieldOrder, FieldLabels, ...)
-  api/          (typed client for /api)
-/tests/                            <- PHPUnit/Pest feature tests (Portal faked via Http::fake)
+    PortalClient.php
+    ConfigStore.php            <- drafts + live, atomic writes
+/config/runner.php
+/routes/web.php, /routes/api.php
+/resources/js/
+  wizard/steps/                <- one folder per wizard step
+  components/
+  api/
+/tests/                        <- Pest/PHPUnit, Portal faked with Http::fake()
 ```
 
 ## Core data model
 
-One JSON file per webmap (`RunnerConfig`, versioned by `schemaVersion`) holding an
-ordered list of `LayerConfig` entries: enable flag, ordered visible fields, ordered
-editable fields, label overrides, sort, page size, and a capability snapshot.
-
-**`docs/CONFIG_OUTPUT_SCHEMA.md` is the single authoritative definition** — it is
-the contract with the widget repo. Don't redefine the shape anywhere else.
+One `RunnerConfig` per webmap, versioned by `schemaVersion`: selected layers,
+selected fields with input types, enabled pages, layout per page, custom CSS,
+and per-layer JS handlers and PHP hook choice.
+**`docs/CONFIG_OUTPUT_SCHEMA.md` is the only definition** — don't redefine it.
 
 ## Phasing
 
-**Phase 1 — Authentication & Portal introspection**
-- Portal OAuth2 login/callback/logout, token refresh, group-membership gate
-- Frontend: Login page
-- Backend: Webmap/layer listing endpoints
-- Frontend: Webmap selector UI
-
-**Phase 2 — Layer inspection & field configuration UI**
-- Backend: Layer schema introspection (fields, types, domains, editability)
-- Frontend: Layer picker
-- Frontend: Field visibility checkbox list (with drag-to-reorder)
-- Frontend: Field editability checkbox list
-
-**Phase 3 — Config generation & storage**
-- Backend: Generate JSON config from form input
-- Backend: Write JSON to network drive
-- Backend: Public read endpoint `GET /api/configs/{webmapId}` with CORS for the ExB origin
-- Frontend: Config preview/review before save
-- Frontend: Save button, success feedback
-
-**Phase 4 — Polish**
-- Session timeout UX
-- Error handling & validation
-- i18n (if needed)
-- Network drive path configuration (settings/env vars)
+1. **Foundation** — scaffold, Portal sign-in + group check, drafts, step 1.
+2. **Wizard steps 2–4** — layer/field detection, pages, input types.
+3. **Steps 5 & 6** — designer (sections + drag reorder), custom CSS.
+4. **Publish + runtime** — review/publish, runtime config endpoint, edit endpoint
+   with config enforcement.
+5. **Step 7** — JS handlers (after the CSP spike), PHP hook system.
+6. **Polish** — drift warnings (saved fields/layers no longer in the service),
+   error handling, session timeout UX.
 
 ## How work gets done
 
-Same as ArcGIS Runner widget: this chat is the **brain**, and builder sessions
-are spawned for individual tasks. CLAUDE.md is the single source of truth —
-keep it current.
+The planning chat (the "brain") covers both this repo and the widget repo.
+It keeps the CLAUDE.md files and backlogs current and hands each backlog task
+to a separate builder session. Each builder session reads this file first,
+does one task, and checks it off in `docs/TASKS.md`.
 
 ## Conventions
 
-- TypeScript strict, no `any` unless unavoidable.
-- PHP: Laravel conventions (controllers thin, logic in `app/Services`, constructor
-  injection). Portal is faked in tests with `Http::fake()`; nothing hits a real Portal in CI.
-- No comments unless *why* is non-obvious.
-- Config JSON schema is the contract between this site and the widget — keep
-  `docs/CONFIG_OUTPUT_SCHEMA.md` in sync with what the backend actually outputs.
+- TypeScript strict; no `any` unless unavoidable.
+- Laravel conventions: thin controllers, logic in `app/Services` / `app/Runner`,
+  constructor injection. Portal is faked with `Http::fake()` in tests; tests
+  never hit a real Portal.
+- Comments only for a non-obvious *why*.
+- Any change to config shape updates `docs/CONFIG_OUTPUT_SCHEMA.md` and bumps
+  `schemaVersion` once the widget has shipped against it.
