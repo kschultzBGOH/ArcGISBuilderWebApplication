@@ -5,17 +5,21 @@ One task = one builder session. Check off as work lands.
 ## Phase 0 — Decisions & scaffolding
 
 - [x] CLAUDE.md brain doc + output schema contract
-- [ ] Resolve "Open decisions" in CLAUDE.md (PHP framework, Portal version, OAuth app, save permissions)
-- [ ] Scaffold `backend/` (PHP 8.4, Composer, chosen framework, `.env.example` with `PORTAL_URL`, `OAUTH_CLIENT_ID`, `CONFIG_ROOT`, `ALLOWED_ORIGINS`)
-- [ ] Scaffold `frontend/` (React + TypeScript + Vite, Calcite Components)
-- [ ] Local dev loop: frontend dev server proxies `/api` to PHP built-in server
+- [x] Decisions: Laravel, Portal 12.0, Portal OAuth app (org creating), single-group access
+- [ ] **User:** register the OAuth app in Portal 12.0 (redirect URI `{APP_URL}/auth/callback`), note the group id
+- [ ] Scaffold Laravel app (PHP 8.4) + React/TS via Vite in `resources/js`, Calcite Components, `config/runner.php`, `.env.example` with all vars from CLAUDE.md
+- [ ] `runner_configs` filesystem disk bound to `CONFIG_ROOT`
+- [ ] Test setup (Pest/PHPUnit, `Http::fake()` Portal fixtures for 12.0 responses)
+- [ ] `docs/DEPLOYMENT.md`: server requirements, share mount + permissions, OAuth app setup
 
 ## Phase 1 — Auth & Portal introspection
 
-- [ ] Portal OAuth2 login/callback/logout endpoints; token kept in PHP session
-- [ ] `GET /api/me` (current Portal user)
-- [ ] `GET /api/webmaps` (search user's accessible webmaps)
-- [ ] Frontend: login page + webmap selector
+- [ ] `PortalClient` service: authorize URL, code exchange, refresh, `community/self`
+- [ ] `/auth/login`, `/auth/callback`, `/auth/logout`; tokens in server session only
+- [ ] `EnsurePortalGroupMember` middleware (`PORTAL_ALLOWED_GROUP_ID`); not-authorized page
+- [ ] `GET /api/me`
+- [ ] `GET /api/webmaps` (search webmaps the user can access)
+- [ ] SPA: login screen + webmap selector
 
 ## Phase 2 — Layer inspection & field config UI
 
@@ -35,6 +39,5 @@ One task = one builder session. Check off as work lands.
 
 ## Phase 4 — Polish
 
-- [ ] Save permission check (Portal group/role)
 - [ ] Config drift warning: fields/layers in saved config no longer in service
-- [ ] Error handling, token refresh, session timeout UX
+- [ ] Error handling, session timeout UX
