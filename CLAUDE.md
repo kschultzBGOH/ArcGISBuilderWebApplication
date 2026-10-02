@@ -49,7 +49,10 @@ Common steps (every kind):
 - **Name & kind** — profile name and kind.
 - **Select webmap** — search webmaps the signed-in user can access in Portal.
 - *(kind-specific steps)*
-- **Custom CSS** — one stylesheet per profile, applied only inside the widget.
+- **Custom CSS** — one stylesheet per profile, applied to the whole experience
+  once a Runner widget with that profile loads. Rules that start with
+  `.arcgis-runner` (or `[data-profile="{id}"]`) target only the widget. The live
+  preview shows the widget only, not the full experience.
 - **Custom code** — JavaScript event handlers (events are defined by the kind)
   and, for kinds that write data, a PHP hook per layer.
 - **Review & Publish** — show the profile JSON, validate it, publish.

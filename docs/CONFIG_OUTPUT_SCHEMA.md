@@ -20,10 +20,14 @@ interface RunnerProfile {
   portalUrl: string
   publishedAt: string            // ISO 8601
   publishedBy: string            // Portal username
-  customCss: string              // widget scopes it under its root element
+  customCss: string              // unscoped; styles the whole experience (see below)
   settings: CrudSettings         // shape depends on `kind`
 }
 ```
+
+`customCss` is injected into the page `<head>` once per profile and stays
+until the page reloads. The widget root carries `class="arcgis-runner"` and
+`data-profile="{id}"`, so authors can target Runner alone.
 
 Listing (`GET /api/runtime/profiles?webmapId=`) returns
 `Array<Pick<RunnerProfile, 'id' | 'name' | 'kind' | 'webmapId' | 'publishedAt'>>`.

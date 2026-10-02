@@ -34,7 +34,7 @@ One task = one builder session. Check off as work lands.
 
 ## Phase 3 — Publish & runtime
 
-- [ ] Custom CSS step with live preview
+- [ ] Custom CSS step with widget-only live preview; note in the UI that rules apply to the whole experience
 - [ ] Review & Publish: validate via kind validator, write published file
 - [ ] `ResolvePortalIdentity` middleware (optional token → user or anonymous)
 - [ ] `WebmapAccess`: check webmap visibility as the user or anonymously, short cache
