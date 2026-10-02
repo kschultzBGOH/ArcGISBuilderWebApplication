@@ -89,6 +89,8 @@ This section is identical in both repos. The brain session keeps them in sync.
 - Widget: Map widget connection, profile dropdown in settings, `crud` rendering, writes through the builder app
 - Widget build served from the builder app and registered in Portal once
 - Runner access follows Portal sharing of the webmap and its layers, including public, anonymous sharing
+- Two-way selection: List rows highlight on the map, and map clicks open the feature in Runner's View screen
+- Record links: a URL that opens a specific feature's View or Edit screen
 
 ### Out of scope (v1)
 
