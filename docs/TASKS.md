@@ -36,9 +36,10 @@ One task = one builder session. Check off as work lands.
 
 - [ ] Custom CSS step with live preview
 - [ ] Review & Publish: validate via kind validator, write published file
-- [ ] `VerifyPortalToken` middleware
+- [ ] `ResolvePortalIdentity` middleware (optional token → user or anonymous)
+- [ ] `WebmapAccess`: check webmap visibility as the user or anonymously, short cache
 - [ ] `GET /api/runtime/profiles?webmapId=` and `GET /api/runtime/profiles/{id}` + CORS
-- [ ] `EditGate` + `POST /api/runtime/profiles/{id}/edits/{layerId}` → `applyEdits` as the user
+- [ ] `EditGate` + `POST /api/runtime/profiles/{id}/edits/{layerId}` → `applyEdits` as the user or anonymously; anonymous rate limit
 - [ ] Widget deploy script: copy Developer Edition 1.18 build output into `public/widgets/arcgis-runner/`
 
 ## Phase 4 — Custom code

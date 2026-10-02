@@ -85,6 +85,7 @@ This section is identical in both repos. The brain session keeps them in sync.
 - PHP hooks as reviewed classes in the builder repo, chosen per layer in the wizard
 - Widget: Map widget connection, profile dropdown in settings, `crud` rendering, writes through the builder app
 - Widget build served from the builder app and registered in Portal once
+- Runner access follows Portal sharing of the webmap and its layers, including public, anonymous sharing
 
 ### Out of scope (v1)
 
@@ -117,9 +118,19 @@ This section is identical in both repos. The brain session keeps them in sync.
   `{APP_URL}/auth/callback`). Tokens stay in the server session.
 - **Builder authorization**: members of `PORTAL_ALLOWED_GROUP_ID`, checked at
   login and on every save/publish.
-- **Widget auth**: the widget sends the current user's Portal token
-  (`Authorization: Bearer`). Laravel verifies it with Portal and uses it for that
-  user's edits, so service permissions and editor tracking apply.
+- **Runtime access follows Portal sharing.** Laravel never adds its own sign-in
+  requirement for widget users. The widget sends the user's Portal token
+  (`Authorization: Bearer`) when the user is signed in, and nothing when they're
+  anonymous. `ResolvePortalIdentity` turns that into a Portal user or "anonymous".
+  - **Profiles** are readable by anyone who can open the profile's webmap.
+    Laravel asks Portal for the webmap item as that user, or anonymously, and
+    caches the answer briefly (`WebmapAccess`).
+  - **Edits** are sent to the feature service as that user, or anonymously. The
+    service's own sharing and editing settings decide, so editor tracking and
+    permissions behave exactly as they do in Portal. Laravel only adds the profile
+    rules (`EditGate`) and PHP hooks.
+  - **Anonymous edits** are rate-limited per IP (`RUNNER_ANON_EDITS_PER_MINUTE`),
+    because the edit endpoint is open whenever a public editable layer is behind it.
 - **Storage** (Laravel disk `runner_configs`, root `CONFIG_ROOT` on the network share):
   - `profiles/{profileId}.json` — published
   - `drafts/{profileId}.json` — draft
@@ -130,12 +141,12 @@ This section is identical in both repos. The brain session keeps them in sync.
   committed. Portal's widget item points at
   `{APP_URL}/widgets/arcgis-runner/manifest.json`. The web server (not Laravel)
   must send CORS headers for that folder to the Portal origin.
-- **Runtime endpoints** (Portal token required, CORS limited to `RUNNER_ALLOWED_ORIGINS`):
+- **Runtime endpoints** (access as above, CORS limited to `RUNNER_ALLOWED_ORIGINS`):
   - `GET /api/runtime/profiles?webmapId=` — published profiles (id, name, kind,
-    webmapId) for the widget's settings dropdown
+    webmapId) for the widget's settings dropdown, if the caller can open that webmap
   - `GET /api/runtime/profiles/{profileId}` — one published profile
   - `POST /api/runtime/profiles/{profileId}/edits/{layerId}` — `crud` writes: config
-    check (`EditGate`), PHP `before*` hook, `applyEdits` as the user, `after*` hook
+    check (`EditGate`), PHP `before*` hook, `applyEdits` as the user or anonymously, `after*` hook
 - **Reads** (crud List/View) go straight from the widget to the feature service.
 
 ## Input types (`crud`)
@@ -177,6 +188,7 @@ hook class per layer. **The server never runs PHP text from a profile or the bro
 | `PORTAL_ALLOWED_GROUP_ID` | group allowed to use the builder |
 | `CONFIG_ROOT` | mount path of the network share |
 | `RUNNER_ALLOWED_ORIGINS` | origins where experiences run (normally the Portal host) |
+| `RUNNER_ANON_EDITS_PER_MINUTE` | per-IP rate limit for anonymous edits |
 
 ## Repo layout
 
@@ -190,10 +202,10 @@ hook class per layer. **The server never runs PHP text from a profile or the bro
   Http/Controllers/
     AuthController.php
     Builder/                   <- webmaps, layers, profiles, drafts, publish (group-gated)
-    Runtime/                   <- profiles + edits for the widget (Portal-token-gated)
+    Runtime/                   <- profiles + edits for the widget (access follows Portal sharing)
   Http/Middleware/
     EnsurePortalGroupMember.php
-    VerifyPortalToken.php
+    ResolvePortalIdentity.php  <- optional token -> Portal user or anonymous
   Runner/
     KindRegistry.php           <- kind key -> settings validator + runtime handlers
     Kinds/Crud/                <- InputTypes, EditGate, CrudSettingsValidator
@@ -201,6 +213,7 @@ hook class per layer. **The server never runs PHP text from a profile or the bro
   Hooks/                       <- PHP hooks (reviewed code)
   Services/
     PortalClient.php
+    WebmapAccess.php           <- can this identity open this webmap? (short cache)
     ProfileStore.php           <- drafts + published, atomic writes
 /config/runner.php
 /routes/web.php, /routes/api.php
