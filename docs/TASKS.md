@@ -11,7 +11,7 @@ One task = one builder session. Check off as work lands.
 - [ ] Scaffold Laravel (PHP 8.4) + React/TS/Vite in `resources/js`, Calcite Components, `config/runner.php`, `.env.example`
 - [ ] `runner_configs` disk + `ProfileStore` (drafts + published, atomic writes, slug ids)
 - [ ] Test setup: Pest, `Http::fake()` Portal 12.0 fixtures
-- [ ] `docs/DEPLOYMENT.md` (incl. widget hosting folder, web-server CORS, Portal widget registration)
+- [ ] `docs/DEPLOYMENT.md`: IIS site, PHP 8.4 NTS FastCGI, URL Rewrite + `public/web.config`, app pool as domain service account, UNC share permissions, widget folder `web.config` CORS, Portal widget registration
 
 ## Phase 1 — Foundation
 

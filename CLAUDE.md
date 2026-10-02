@@ -75,7 +75,7 @@ This section is identical in both repos. The brain session keeps them in sync.
 
 | Part | Repo | Role |
 |---|---|---|
-| Builder Web Application | `kschultzBGOH/ArcGISBuilderWebApplication` | Standalone Laravel + React site on the org's internal servers. Builds and publishes profiles, hosts the Runner widget files, and handles every widget write. |
+| Builder Web Application | `kschultzBGOH/ArcGISBuilderWebApplication` | Standalone Laravel + React site hosted on the org's own IIS servers. Builds and publishes profiles, hosts the Runner widget files, and handles every widget write. |
 | ArcGIS Runner widget | `kschultzBGOH/ArcGISRunner` | One Experience Builder custom widget, registered in Portal 12.0 once. Renders the profile chosen in its settings. |
 
 ### In scope (v1)
@@ -112,8 +112,12 @@ This section is identical in both repos. The brain session keeps them in sync.
 
 ## Locked-in architecture decisions
 
-- **Backend**: Laravel (current major supporting PHP 8.4) on PHP 8.4.25, on the
-  org's internal servers.
+- **Backend**: Laravel (current major supporting PHP 8.4) on PHP 8.4.25, hosted on
+  **IIS** (Windows) on the org's own servers. PHP runs as FastCGI (non-thread-safe
+  x64 build). The IIS URL Rewrite module sends every request that isn't a real
+  file to `public/index.php`, configured in `public/web.config`, which is committed.
+  The IIS application pool runs as a **domain service account** with write access to
+  the network share.
 - **Frontend**: React + TypeScript SPA in `resources/js`, built with Vite
   (`laravel-vite-plugin`), Calcite Components. Same-origin session cookies. The
   SPA never calls Portal directly.
@@ -144,8 +148,9 @@ This section is identical in both repos. The brain session keeps them in sync.
 - **Widget hosting**: the compiled widget (Developer Edition 1.18 build output) lives
   in `public/widgets/arcgis-runner/`, copied there by a deploy script and not
   committed. Portal's widget item points at
-  `{APP_URL}/widgets/arcgis-runner/manifest.json`. The web server (not Laravel)
-  must send CORS headers for that folder to the Portal origin.
+  `{APP_URL}/widgets/arcgis-runner/manifest.json`. IIS serves those static files
+  directly, so a `web.config` in that folder (not Laravel) adds the CORS headers
+  for the Portal origin.
 - **Runtime endpoints** (access as above, CORS limited to `RUNNER_ALLOWED_ORIGINS`):
   - `GET /api/runtime/profiles?webmapId=` — published profiles (id, name, kind,
     webmapId) for the widget's settings dropdown, if the caller can open that webmap
@@ -191,7 +196,7 @@ hook class per layer. **The server never runs PHP text from a profile or the bro
 | `PORTAL_URL` | e.g. `https://gis.example.org/portal` |
 | `PORTAL_OAUTH_CLIENT_ID` / `PORTAL_OAUTH_CLIENT_SECRET` | Portal OAuth app |
 | `PORTAL_ALLOWED_GROUP_ID` | group allowed to use the builder |
-| `CONFIG_ROOT` | mount path of the network share |
+| `CONFIG_ROOT` | UNC path of the network share, e.g. `\\fileserver\gis\runner` (mapped drive letters aren't visible to the IIS app pool) |
 | `RUNNER_ALLOWED_ORIGINS` | origins where experiences run (normally the Portal host) |
 | `RUNNER_ANON_EDITS_PER_MINUTE` | per-IP rate limit for anonymous edits |
 
@@ -202,7 +207,7 @@ hook class per layer. **The server never runs PHP text from a profile or the bro
 /docs/
   TASKS.md
   CONFIG_OUTPUT_SCHEMA.md      <- profile JSON contract with the widget (only definition)
-  DEPLOYMENT.md                <- server, share mount, OAuth app, widget hosting + CORS, Portal registration
+  DEPLOYMENT.md                <- IIS + PHP FastCGI, app pool identity, share access, OAuth app, widget hosting + CORS, Portal registration
 /app/
   Http/Controllers/
     AuthController.php
