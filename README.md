@@ -1,4 +1,4 @@
-# ArcGIS Runner Config Site
+# ArcGIS Builder Web Application
 
 PHP 8.4 + React tool for building the JSON configs consumed by the
 [ArcGIS Runner](https://github.com/kschultzBGOH/ArcGISRunner) Experience Builder widget.

@@ -1,8 +1,8 @@
-# ArcGIS Runner Config Site
+# ArcGIS Builder Web Application
 
 ## What this project is
 
-ArcGIS Runner Config Site is a **Laravel (PHP 8.4) + React web application** that lets you visually
+ArcGIS Builder Web Application is a **Laravel (PHP 8.4) + React web application** that lets you visually
 configure which ArcGIS feature layers and tables should be exposed in the ArcGIS Runner
 widget (the paired Experience Builder widget), and what fields should be visible/editable
 for each layer.
@@ -20,7 +20,7 @@ Workflow:
 4. The site generates a **JSON config file** and stores it on your org's network drive
 5. The paired ArcGIS Runner widget loads that JSON file and uses it to drive its CRUD UI
 
-This config site is the **single source of truth** for layer/field configuration. The widget
+This builder app is the **single source of truth** for layer/field configuration. The widget
 simply reads and obeys the JSON — it does not have a settings panel of its own.
 
 ## Locked-in architecture decisions

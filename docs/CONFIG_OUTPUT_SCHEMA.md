@@ -1,6 +1,6 @@
 # Runner Config JSON — Output Schema (v1)
 
-This is the **contract** between ArcGIS Runner Config Site (producer) and the
+This is the **contract** between ArcGIS Builder Web Application (producer) and the
 ArcGIS Runner ExB widget (consumer). Any change here must bump `schemaVersion`
 and be mirrored in the widget repo.
 
