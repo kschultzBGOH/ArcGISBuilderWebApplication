@@ -2,186 +2,199 @@
 
 ## What this project is
 
-A **Laravel (PHP 8.4) + React** web app, in the spirit of PHPRunner, for building
-ArcGIS Runner apps without code. You walk through a 7-step wizard against a
-Portal 12.0 webmap, and the result is one JSON config per webmap. The paired
-**ArcGIS Runner** Experience Builder widget (`kschultzBGOH/ArcGISRunner`) loads
-that config and renders the list/add/edit/view/delete pages it describes.
+A **Laravel (PHP 8.4) + React** web app, in the spirit of PHPRunner, for
+generating Experience Builder widget functionality without writing code.
 
-Only members of one designated Portal group may sign in.
+- You build **profiles** in a wizard. A profile is a named, published
+  configuration of a given **kind** (the first kind is `crud`: list/add/edit/view/delete
+  over feature layers and tables; more kinds come later).
+- There is **one** Experience Builder widget, **ArcGIS Runner**
+  (`kschultzBGOH/ArcGISRunner`), registered in Portal once. When an app author
+  adds it to an experience, they pick a profile in its settings panel. The
+  widget loads that profile and renders the matching kind.
+- Deploying a new "widget" means publishing a profile. No rebuild, no Portal
+  registration, no file copying.
 
-This app does two jobs:
-1. **Builder** — the wizard UI and the config files it produces.
-2. **Runtime backend for the widget** — serves configs and is the single path
-   for all widget *writes* (add/update/delete), so server-side PHP hooks and
-   config rules are enforced on every edit.
+Only members of one designated Portal group may use the builder.
+
+This app does three jobs:
+1. **Builder** — the wizard UI and the profiles it produces.
+2. **Widget host** — serves the compiled Runner widget files that Portal's
+   registered widget item points at.
+3. **Runtime backend** — serves published profiles to the widget and is the
+   single path for every widget *write*, so config rules and PHP hooks are
+   enforced on every edit.
+
+## Kinds
+
+A kind is a plug-in on both sides, sharing a `kind` key such as `crud`:
+- **Builder** (`app/Runner/Kinds/{Kind}/` + `resources/js/wizard/kinds/{kind}/`):
+  its wizard steps, its settings validator, and any runtime endpoints it needs.
+- **Widget** (`widgets/arcgis-runner/src/runtime/kinds/{kind}/` in the widget repo):
+  its React UI, loaded only when a profile of that kind is used.
+
+Shared across all kinds: name, kind, target webmap, custom CSS, custom
+JavaScript, publish/draft lifecycle. Adding a kind means adding both halves,
+plus its settings shape in `docs/CONFIG_OUTPUT_SCHEMA.md`. A widget that
+doesn't know a profile's kind shows "update the Runner widget" instead of
+guessing.
 
 ## The wizard
 
-Each step is a page in the SPA. Progress autosaves to a server-side **draft**;
-**Publish** (end of step 7) writes the live config the widget reads.
+Progress autosaves to a server-side **draft**. **Publish** makes the profile
+available to the widget. Republishing updates every experience using that
+profile.
 
-1. **Select webmap** — search the webmaps the signed-in user can access in Portal.
-2. **Layers & fields** — auto-detect every feature layer and table in the webmap
-   (group layers flattened). Show each one's fields with their field types.
-   Select which layers and which fields to include.
-3. **Pages** — for each selected layer, checkboxes: **List**, **Add**, **Edit**,
-   **View**, **Delete**. A box is disabled when the service doesn't support it
-   (Add needs `supportsAdd`, Edit needs `supportsUpdate`, Delete needs `supportsDelete`).
-4. **Input types** — for each field, choose how it's entered/displayed. Choices
-   are filtered to what's valid for the field type (see "Input types").
-5. **Designer** — per layer, per page: List page = ordered columns (plus default
-   sort and page size); Add/Edit/View pages = fields grouped into titled
-   **sections**, drag to reorder sections and the fields inside them.
-6. **Custom CSS** — one stylesheet per config, applied only inside the widget.
-7. **Custom code** — per layer:
-   - **JavaScript** event handlers, written in the builder, run by the widget in
-     the browser (see "Custom JavaScript").
-   - **PHP hook** — choose one hook class from the code that's deployed. The PHP
-     itself is never typed into the builder (see "PHP hooks").
+Common steps (every kind):
+- **Name & kind** — profile name and kind.
+- **Select webmap** — search webmaps the signed-in user can access in Portal.
+- *(kind-specific steps)*
+- **Custom CSS** — one stylesheet per profile, applied only inside the widget.
+- **Custom code** — JavaScript event handlers (events are defined by the kind)
+  and, for kinds that write data, a PHP hook per layer.
+- **Review & Publish** — show the profile JSON, validate it, publish.
 
-Then **Review & Publish**: show the config as JSON and publish it.
+`crud` kind steps:
+1. **Layers & fields** — auto-detect every feature layer and table in the webmap
+   (group layers flattened), show their fields and field types, select which
+   to include.
+2. **Pages** — per layer: **List**, **Add**, **Edit**, **View**, **Delete**.
+   A box is disabled if the service doesn't support it.
+3. **Input types** — per field, filtered to what's valid for its field type.
+4. **Designer** — List: column order, sort, page size. Add/Edit/View: titled
+   sections, drag to reorder sections and fields.
 
 ## Locked-in architecture decisions
 
-- **Backend**: Laravel (current major release supporting PHP 8.4) on PHP 8.4.25,
-  on the org's internal servers.
+- **Backend**: Laravel (current major supporting PHP 8.4) on PHP 8.4.25, on the
+  org's internal servers.
 - **Frontend**: React + TypeScript SPA in `resources/js`, built with Vite
-  (`laravel-vite-plugin`), Calcite Components for UI. Served by Laravel from the
-  same origin, using session cookies. The SPA never calls Portal directly.
-- **Portal**: ArcGIS Enterprise **12.0**. Every Portal/feature-service call goes
-  through `PortalClient` so version quirks live in one place.
-- **Builder authentication**: Portal OAuth2 authorization-code flow with the
-  org's registered OAuth app (redirect URI `{APP_URL}/auth/callback`). Portal
-  tokens stay in the server session and never reach the browser.
-- **Builder authorization**: only members of `PORTAL_ALLOWED_GROUP_ID`, checked at
-  login and again on every save/publish via `/sharing/rest/community/self`.
-- **Widget authentication**: widget users are ordinary Portal users, not
-  necessarily in the builder group. The widget sends the user's own Portal token
-  (`Authorization: Bearer`). Laravel verifies it against Portal and forwards it to
-  the feature service, so service permissions and editor tracking apply to that user.
-- **Config storage**: Laravel disk `runner_configs`, root `CONFIG_ROOT` (the mounted
-  network share). Live configs are `{webmapId}.json`; drafts are
-  `drafts/{webmapId}.json`. Writes are atomic (temp file + rename).
-- **Widget endpoints** (CORS limited to `RUNNER_ALLOWED_ORIGINS`, Portal token required):
-  - `GET /api/runtime/configs/{webmapId}` — the live config
-  - `POST /api/runtime/edits/{webmapId}/{layerId}` — add/update/delete. Laravel
-    rejects anything the config doesn't allow (page disabled, field not
-    selected). It then runs the layer's PHP `before*` hook, calls the feature
-    service `applyEdits` with the user's token, and runs the `after*` hook.
-- **Reads** (List/View queries) go straight from the widget to the feature service
-  through `@arcgis/core`. Only writes go through Laravel.
+  (`laravel-vite-plugin`), Calcite Components. Same-origin session cookies. The
+  SPA never calls Portal directly.
+- **Portal**: ArcGIS Enterprise **12.0** (Experience Builder 1.18, ArcGIS Maps SDK
+  for JavaScript 4.33). All Portal calls go through `PortalClient`.
+- **Builder auth**: Portal OAuth2 authorization-code flow (redirect
+  `{APP_URL}/auth/callback`). Tokens stay in the server session.
+- **Builder authorization**: members of `PORTAL_ALLOWED_GROUP_ID`, checked at
+  login and on every save/publish.
+- **Widget auth**: the widget sends the current user's Portal token
+  (`Authorization: Bearer`). Laravel verifies it with Portal and uses it for that
+  user's edits, so service permissions and editor tracking apply.
+- **Storage** (Laravel disk `runner_configs`, root `CONFIG_ROOT` on the network share):
+  - `profiles/{profileId}.json` — published
+  - `drafts/{profileId}.json` — draft
+  - Atomic writes (temp file + rename). `profileId` is a generated slug
+    that never changes after creation.
+- **Widget hosting**: the compiled widget (Developer Edition 1.18 build output) lives
+  in `public/widgets/arcgis-runner/`, copied there by a deploy script and not
+  committed. Portal's widget item points at
+  `{APP_URL}/widgets/arcgis-runner/manifest.json`. The web server (not Laravel)
+  must send CORS headers for that folder to the Portal origin.
+- **Runtime endpoints** (Portal token required, CORS limited to `RUNNER_ALLOWED_ORIGINS`):
+  - `GET /api/runtime/profiles?webmapId=` — published profiles (id, name, kind,
+    webmapId) for the widget's settings dropdown
+  - `GET /api/runtime/profiles/{profileId}` — one published profile
+  - `POST /api/runtime/profiles/{profileId}/edits/{layerId}` — `crud` writes: config
+    check (`EditGate`), PHP `before*` hook, `applyEdits` as the user, `after*` hook
+- **Reads** (crud List/View) go straight from the widget to the feature service.
 
-## Input types
+## Input types (`crud`)
 
-Each input type is a key such as `text`, plus optional `inputOptions`. The
-registry in the builder (`app/Runner/InputTypes.php`) and the widget's
-renderers must use the same keys. New types get added over time; adding one is
-a schema change, so update `docs/CONFIG_OUTPUT_SCHEMA.md` and the widget too.
-
-Starting set:
+A key plus optional `inputOptions`. The keys in `app/Runner/Kinds/Crud/InputTypes.php`
+and the widget's renderers must match. Adding a key is a schema change.
 
 | Key | Valid for |
 |---|---|
-| `text` | string |
-| `textarea` | string |
+| `text`, `textarea` | string |
 | `number` | integer, small integer, double, single |
 | `date` | date, date-only |
 | `datetime` | date |
 | `dropdown` | any field with a coded-value domain |
-| `readonly` | any field (shown, never editable) |
+| `readonly` | any field |
 
 ## Custom JavaScript
 
-Handlers are stored as source text in the config. The widget runs each one as a
-function that receives a `ctx` object (layer, page, feature attributes,
-`setValue`, `cancel(message)`). The event set and `ctx` shape are defined in
-`docs/CONFIG_OUTPUT_SCHEMA.md`.
-
+Stored as source text in the profile and run by the widget with a `ctx` object.
+Each kind defines its own event set (see the schema doc).
 **Risk:** this code runs in every widget user's browser with their Portal
-session, so anyone in the builder group can run code as other users. Keep the
-group small. Also, Experience Builder's Content-Security-Policy may block
-running code from text. That gets an early spike task before any widget work
-depends on it.
+session, so keep the builder group small. Whether Experience Builder's
+Content-Security-Policy allows it is an early spike task.
 
 ## PHP hooks
 
-Hooks are PHP classes in `app/Hooks/` that implement `App\Runner\LayerHook`
-(`beforeAdd`, `afterAdd`, `beforeUpdate`, `afterUpdate`, `beforeDelete`,
-`afterDelete`). `before*` hooks can change attributes or throw
-`HookRejected($message)`, and that message is shown to the widget user.
-
-Hooks go through git and code review, and are deployed like any other code. The
-builder discovers the deployed hook classes and lets you pick one per layer.
-**The server never runs PHP text that came from a config or the browser.**
+Classes in `app/Hooks/` implementing `App\Runner\LayerHook` (`beforeAdd`,
+`afterAdd`, `beforeUpdate`, `afterUpdate`, `beforeDelete`, `afterDelete`).
+`before*` hooks can change attributes or throw `HookRejected($message)`. Hooks
+are reviewed in git and deployed like any other code. The builder only picks a
+hook class per layer. **The server never runs PHP text from a profile or the browser.**
 
 ### Environment variables (`.env`)
 
 | Var | Purpose |
 |---|---|
 | `PORTAL_URL` | e.g. `https://gis.example.org/portal` |
-| `PORTAL_OAUTH_CLIENT_ID` / `PORTAL_OAUTH_CLIENT_SECRET` | Portal OAuth app registration |
-| `PORTAL_ALLOWED_GROUP_ID` | group whose members may use the builder |
+| `PORTAL_OAUTH_CLIENT_ID` / `PORTAL_OAUTH_CLIENT_SECRET` | Portal OAuth app |
+| `PORTAL_ALLOWED_GROUP_ID` | group allowed to use the builder |
 | `CONFIG_ROOT` | mount path of the network share |
-| `RUNNER_ALLOWED_ORIGINS` | comma-separated Experience Builder origins allowed to call the runtime endpoints |
+| `RUNNER_ALLOWED_ORIGINS` | origins where experiences run (normally the Portal host) |
 
 ## Repo layout
 
 ```
 /CLAUDE.md
 /docs/
-  TASKS.md                     <- backlog
-  CONFIG_OUTPUT_SCHEMA.md      <- JSON contract with the widget (only definition)
-  DEPLOYMENT.md                <- server, share mount, Portal OAuth app
+  TASKS.md
+  CONFIG_OUTPUT_SCHEMA.md      <- profile JSON contract with the widget (only definition)
+  DEPLOYMENT.md                <- server, share mount, OAuth app, widget hosting + CORS, Portal registration
 /app/
   Http/Controllers/
-    AuthController.php         <- login, callback, logout
-    Builder/                   <- webmaps, layers, drafts, publish (group-gated)
-    Runtime/                   <- configs + edits for the widget (Portal-token-gated)
+    AuthController.php
+    Builder/                   <- webmaps, layers, profiles, drafts, publish (group-gated)
+    Runtime/                   <- profiles + edits for the widget (Portal-token-gated)
   Http/Middleware/
     EnsurePortalGroupMember.php
     VerifyPortalToken.php
   Runner/
-    InputTypes.php             <- input type registry
+    KindRegistry.php           <- kind key -> settings validator + runtime handlers
+    Kinds/Crud/                <- InputTypes, EditGate, CrudSettingsValidator
     LayerHook.php, HookRejected.php, HookRegistry.php
-    EditGate.php               <- enforces config rules on incoming edits
-  Hooks/                       <- per-layer PHP hooks (reviewed code)
+  Hooks/                       <- PHP hooks (reviewed code)
   Services/
     PortalClient.php
-    ConfigStore.php            <- drafts + live, atomic writes
+    ProfileStore.php           <- drafts + published, atomic writes
 /config/runner.php
 /routes/web.php, /routes/api.php
+/public/widgets/arcgis-runner/ <- compiled widget (deployed, gitignored)
 /resources/js/
-  wizard/steps/                <- one folder per wizard step
-  components/
-  api/
-/tests/                        <- Pest/PHPUnit, Portal faked with Http::fake()
+  wizard/common/               <- name & kind, webmap, CSS, code, review
+  wizard/kinds/crud/           <- crud steps
+  components/, api/
+/tests/                        <- Pest, Portal faked with Http::fake()
 ```
 
 ## Core data model
 
-One `RunnerConfig` per webmap, versioned by `schemaVersion`: selected layers,
-selected fields with input types, enabled pages, layout per page, custom CSS,
-and per-layer JS handlers and PHP hook choice.
-**`docs/CONFIG_OUTPUT_SCHEMA.md` is the only definition** — don't redefine it.
+A `RunnerProfile` holds the shared fields (id, name, kind, webmap, CSS, JS)
+plus a kind-specific `settings` object. **`docs/CONFIG_OUTPUT_SCHEMA.md` is the
+only definition.**
 
 ## Phasing
 
-1. **Foundation** — scaffold, Portal sign-in + group check, drafts, step 1.
-2. **Wizard steps 2–4** — layer/field detection, pages, input types.
-3. **Steps 5 & 6** — designer (sections + drag reorder), custom CSS.
-4. **Publish + runtime** — review/publish, runtime config endpoint, edit endpoint
-   with config enforcement.
-5. **Step 7** — JS handlers (after the CSP spike), PHP hook system.
-6. **Polish** — drift warnings (saved fields/layers no longer in the service),
-   error handling, session timeout UX.
+1. **Foundation** — scaffold, Portal sign-in + group check, profile store,
+   wizard shell with common steps (name & kind, webmap).
+2. **`crud` steps** — layers & fields, pages, input types, designer.
+3. **Publish + runtime** — custom CSS step, review/publish, runtime profile
+   endpoints, edit endpoint with `EditGate`, widget hosting.
+4. **Custom code** — JS handlers (after the CSP spike), PHP hooks.
+5. **Polish** — drift warnings, error handling, session timeout UX.
+6. **Next kinds** — design each new kind here before building it.
 
 ## How work gets done
 
-The planning chat (the "brain") covers both this repo and the widget repo.
-It keeps the CLAUDE.md files and backlogs current and hands each backlog task
-to a separate builder session. Each builder session reads this file first,
-does one task, and checks it off in `docs/TASKS.md`.
+The planning chat (the "brain") covers this repo and the widget repo. It
+keeps the CLAUDE.md files and backlogs current and hands each backlog task to
+a separate builder session. Each builder session reads this file first, does
+one task, and checks it off in `docs/TASKS.md`.
 
 ## Conventions
 
@@ -190,5 +203,5 @@ does one task, and checks it off in `docs/TASKS.md`.
   constructor injection. Portal is faked with `Http::fake()` in tests; tests
   never hit a real Portal.
 - Comments only for a non-obvious *why*.
-- Any change to config shape updates `docs/CONFIG_OUTPUT_SCHEMA.md` and bumps
-  `schemaVersion` once the widget has shipped against it.
+- Any change to the profile shape updates `docs/CONFIG_OUTPUT_SCHEMA.md`.
+  Once the widget ships, it also bumps `schemaVersion`.

@@ -5,51 +5,54 @@ One task = one builder session. Check off as work lands.
 ## Phase 0 — Decisions & scaffolding
 
 - [x] CLAUDE.md, schema contract, backlog
-- [x] Decisions: Laravel, Portal 12.0, OAuth app, single-group access, 7-step wizard, PHP hooks as reviewed code
+- [x] Decisions: Laravel, Portal 12.0, OAuth app, single-group access, PHP hooks as reviewed code
+- [x] Decisions: one registered widget + profiles; kinds (`crud` first); widget hosted by Laravel
 - [ ] **User:** register OAuth app in Portal 12.0 (redirect `{APP_URL}/auth/callback`); provide group id
 - [ ] Scaffold Laravel (PHP 8.4) + React/TS/Vite in `resources/js`, Calcite Components, `config/runner.php`, `.env.example`
-- [ ] `runner_configs` disk + `ConfigStore` (drafts + live, atomic writes)
+- [ ] `runner_configs` disk + `ProfileStore` (drafts + published, atomic writes, slug ids)
 - [ ] Test setup: Pest, `Http::fake()` Portal 12.0 fixtures
-- [ ] `docs/DEPLOYMENT.md`
+- [ ] `docs/DEPLOYMENT.md` (incl. widget hosting folder, web-server CORS, Portal widget registration)
 
 ## Phase 1 — Foundation
 
 - [ ] `PortalClient`: authorize URL, code exchange, refresh, `community/self`
 - [ ] `/auth/*` routes; tokens in server session only
 - [ ] `EnsurePortalGroupMember` middleware + not-authorized page
-- [ ] Wizard shell: step navigation, draft autosave/load
-- [ ] Step 1: webmap search + select
+- [ ] `KindRegistry` (PHP) + kind registry (SPA) with `crud` registered
+- [ ] Profile list page (create, open, duplicate, delete draft)
+- [ ] Wizard shell: common steps + kind steps, draft autosave/load
+- [ ] Common steps: name & kind, select webmap
 
-## Phase 2 — Steps 2–4
+## Phase 2 — `crud` steps
 
-- [ ] Layer detection: flatten operational layers + tables (incl. group layers), fetch each layer's schema
-- [ ] Step 2: layer + field selection UI (field types shown)
-- [ ] Step 3: page checkboxes, disabled by capabilities
-- [ ] `InputTypes` registry (key → valid field types, default per field type)
-- [ ] Step 4: input type picker per field, filtered by field type; system fields forced to `readonly`
+- [ ] Layer detection: flatten operational layers + tables (incl. group layers), fetch schemas
+- [ ] Layers & fields step
+- [ ] Pages step (disabled by capabilities)
+- [ ] `InputTypes` registry + input types step (system fields forced `readonly`)
+- [ ] Designer: List layout (columns, sort, page size)
+- [ ] Designer: form sections with drag reorder (Add/Edit/View)
 
-## Phase 3 — Steps 5–6
+## Phase 3 — Publish & runtime
 
-- [ ] Step 5: List layout (column order, sort, page size)
-- [ ] Step 5: form designer — sections, drag reorder sections/fields, per page (Add/Edit/View)
-- [ ] Step 6: CSS editor with live preview
+- [ ] Custom CSS step with live preview
+- [ ] Review & Publish: validate via kind validator, write published file
+- [ ] `VerifyPortalToken` middleware
+- [ ] `GET /api/runtime/profiles?webmapId=` and `GET /api/runtime/profiles/{id}` + CORS
+- [ ] `EditGate` + `POST /api/runtime/profiles/{id}/edits/{layerId}` → `applyEdits` as the user
+- [ ] Widget deploy script: copy Developer Edition 1.18 build output into `public/widgets/arcgis-runner/`
 
-## Phase 4 — Publish & runtime
+## Phase 4 — Custom code
 
-- [ ] Review & Publish: validate draft against schema rules, write live file
-- [ ] `VerifyPortalToken` middleware (widget users' Bearer token)
-- [ ] `GET /api/runtime/configs/{webmapId}` + CORS
-- [ ] `EditGate` + `POST /api/runtime/edits/{webmapId}/{layerId}` → `applyEdits` as the user
-
-## Phase 5 — Step 7
-
-- [ ] **Spike:** does Experience Builder's CSP allow running handler code from text (`new Function`)? Decide the fallback before building the JS editor
-- [ ] Step 7: JS handler editor per layer/event
-- [ ] `LayerHook` interface, `HookRejected`, `HookRegistry` discovery of `app/Hooks/*`
-- [ ] Run hooks around `applyEdits` in the edit endpoint; step 7 hook picker
+- [ ] (Depends on widget repo CSP spike) Custom code step: JS handler editor per layer/event
+- [ ] `LayerHook`, `HookRejected`, `HookRegistry` (discovers `app/Hooks/*`)
+- [ ] Run hooks around `applyEdits`; hook picker in the custom code step
 - [ ] Example hook + tests
 
-## Phase 6 — Polish
+## Phase 5 — Polish
 
 - [ ] Drift warning: saved layers/fields no longer in the service
 - [ ] Error handling, session timeout UX
+
+## Phase 6 — Next kinds
+
+- [ ] Decide and design the second kind (brain session) before any build
