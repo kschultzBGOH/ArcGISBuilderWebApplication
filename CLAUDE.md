@@ -255,9 +255,19 @@ only definition.**
 ## How work gets done
 
 The planning chat (the "brain") covers this repo and the widget repo. It
-keeps the CLAUDE.md files and backlogs current and hands each backlog task to
-a separate builder session. Each builder session reads this file first, does
-one task, and checks it off in `docs/TASKS.md`.
+keeps the CLAUDE.md files and backlogs current and reviews pull requests.
+
+Per task:
+1. One **cloud** Claude Code session per task in `docs/TASKS.md`, started with a
+   self-contained prompt.
+2. The session reads this file, branches from `main`, does the work, checks the
+   box, and opens a **pull request into `main`**. It never pushes to `main` directly.
+3. The brain reviews the pull request and the user merges it.
+
+Cloud sessions can't reach Portal, IIS or the network share. Tests fake Portal
+with `Http::fake()` and use a temporary local folder for `CONFIG_ROOT`. Pull
+requests that touch sign-in, the share or IIS end with a **local test
+checklist** for the user to run against the real servers before merging.
 
 ## Conventions
 
