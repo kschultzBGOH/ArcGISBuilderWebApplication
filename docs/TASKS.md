@@ -1,59 +1,54 @@
 # ArcGIS Builder Web Application — Task Backlog
 
-One task = one builder session. Check off as work lands.
+One task = one coding session and one pull request. Details, steps, acceptance and sources for each id are in [`PLAN.md`](./PLAN.md); open items are in [`ISSUES.md`](./ISSUES.md). Check off as work lands.
 
-## Phase 0 — Decisions & scaffolding
+## B0 — Builder Phase 0 — Decisions & scaffolding
 
-- [x] CLAUDE.md, schema contract, backlog
-- [x] Decisions: Laravel, Portal 12.0, OAuth app, single-group access, PHP hooks as reviewed code
-- [x] Decisions: one registered widget + profiles; kinds (`crud` first); widget hosted by Laravel
-- [ ] **User:** register OAuth app in Portal 12.0 (redirect `{APP_URL}/auth/callback`); provide group id
-- [ ] Scaffold Laravel (PHP 8.4) + React/TS/Vite in `resources/js`, Calcite Components, `config/runner.php`, `.env.example`
-- [ ] `runner_configs` disk + `ProfileStore` (drafts + published, atomic writes, slug ids)
-- [ ] Test setup: Pest, `Http::fake()` Portal 12.0 fixtures
-- [ ] `docs/DEPLOYMENT.md`: IIS site, PHP 8.4 NTS FastCGI, URL Rewrite + `public/web.config`, app pool as domain service account, UNC share permissions, widget folder `web.config` CORS, Portal widget registration
+- [x] **B0.1** CLAUDE.md, schema contract, backlog
+- [x] **B0.2** Decisions: Laravel, Portal 12.0, OAuth app, single-group access, PHP hooks as reviewed code
+- [x] **B0.3** Decisions: one registered widget + profiles; kinds (crud first); widget hosted by Laravel
+- [ ] **B0.4** User: register the OAuth app in Portal 12.0 and provide the group id *(user)*
+- [ ] **B0.5** Scaffold Laravel (PHP 8.4) + React/TS/Vite in resources/js, Calcite Components, config/runner.php, .env.example
+- [ ] **B0.6** runner_configs disk + ProfileStore (drafts + published, atomic writes, slug ids)
+- [ ] **B0.7** Test setup: Pest, Http::fake() Portal 12.0 fixtures
+- [ ] **B0.8** docs/DEPLOYMENT.md: IIS, PHP FastCGI, URL Rewrite, app pool, share, OAuth app, widget CORS, Portal registration
 
-## Phase 1 — Foundation
+## B1 — Builder Phase 1 — Foundation
 
-- [ ] `PortalClient`: authorize URL, code exchange, refresh, `community/self`
-- [ ] `/auth/*` routes; tokens in server session only
-- [ ] `EnsurePortalGroupMember` middleware + not-authorized page
-- [ ] `KindRegistry` (PHP) + kind registry (SPA) with `crud` registered
-- [ ] Profile list page (create, open, duplicate, delete draft)
-- [ ] Wizard shell: common steps + kind steps, draft autosave/load
-- [ ] Common steps: name & kind, select webmap
+- [ ] **B1.1** PortalClient: authorize URL, code exchange, refresh, community/self
+- [ ] **B1.2** /auth/* routes with tokens in the server session only
+- [ ] **B1.3** EnsurePortalGroupMember middleware and not-authorized page
+- [ ] **B1.4** KindRegistry (PHP) and kind registry (SPA) with crud registered
+- [ ] **B1.5** Profile list page: create, open, duplicate, delete draft
+- [ ] **B1.6** Wizard shell: common steps + kind steps, draft autosave/load
+- [ ] **B1.7** Common steps: name & kind, select webmap
 
-## Phase 2 — `crud` steps
+## B2 — Builder Phase 2 — crud wizard steps
 
-- [ ] Layer detection: flatten operational layers + tables (incl. group layers), fetch schemas
-- [ ] Layers & fields step
-- [ ] Pages step (disabled by capabilities)
-- [ ] `InputTypes` registry + input types step (system fields forced `readonly`)
-- [ ] Designer: List layout (columns, sort, page size)
-- [ ] Designer: form sections with drag reorder (Add/Edit/View)
+- [ ] **B2.1** Layer detection: flatten operational layers + tables (incl. group layers), fetch schemas
+- [ ] **B2.2** Layers & fields step
+- [ ] **B2.3** Pages step (disabled by capabilities)
+- [ ] **B2.4** InputTypes registry + input types step (system fields forced readonly)
+- [ ] **B2.5** Designer: List layout (columns, sort, page size)
+- [ ] **B2.6** Designer: form sections with drag reorder (Add/Edit/View)
 
-## Phase 3 — Publish & runtime
+## B3 — Builder Phase 3 — Publish & runtime
 
-- [ ] Custom CSS step with widget-only live preview; note in the UI that rules apply to the whole experience
-- [ ] Review & Publish: validate via kind validator, write published file
-- [ ] `ResolvePortalIdentity` middleware (optional token → user or anonymous)
-- [ ] `WebmapAccess`: check webmap visibility as the user or anonymously, short cache
-- [ ] `GET /api/runtime/profiles?webmapId=` and `GET /api/runtime/profiles/{id}` + CORS
-- [ ] `EditGate` + `POST /api/runtime/profiles/{id}/edits/{layerId}` → `applyEdits` as the user or anonymously; anonymous rate limit
-- [ ] Widget deploy script: copy Developer Edition 1.18 build output into `public/widgets/arcgis-runner/`
+- [ ] **B3.1** Custom CSS step with widget-only live preview
+- [ ] **B3.2** Review & Publish: validate via kind validator, write published file
+- [ ] **B3.3** ResolvePortalIdentity middleware (optional token → user or anonymous)
+- [ ] **B3.4** WebmapAccess: check webmap visibility as the user or anonymously, short cache
+- [ ] **B3.5** Runtime profile endpoints (listing by webmapId, one profile) + CORS
+- [ ] **B3.6** EditGate + POST /api/runtime/profiles/{id}/edits/{layerId} → applyEdits; anonymous rate limit
+- [ ] **B3.7** Widget deploy script: copy Developer Edition 1.18 build output into public/widgets/arcgis-runner/
 
-## Phase 4 — Custom code
+## B4 — Builder Phases 4–6 — Custom code, polish, next kinds
 
-- [ ] (Depends on widget repo CSP spike) Custom code step: JS handler editor per layer/event
-- [ ] `LayerHook`, `HookRejected`, `HookRegistry` (discovers `app/Hooks/*`)
-- [ ] Run hooks around `applyEdits`; hook picker in the custom code step
-- [ ] Example hook + tests
-
-## Phase 5 — Polish
-
-- [ ] Drift warning: saved layers/fields no longer in the service
-- [ ] Error handling, session timeout UX
-
-## Phase 6 — Next kinds
-
-- [ ] Decide and design the second kind (brain session) before any build
+- [ ] **B4.1** Custom code step: JS handler editor per layer/event (gated by widget CSP spike)
+- [ ] **B4.2** `LayerHook`, `HookRejected`, `HookRegistry` (discovers `app/Hooks/*`)
+- [ ] **B4.3** Run hooks around `applyEdits` in the edit endpoint
+- [ ] **B4.4** Hook picker in the custom code step
+- [ ] **B4.5** Example hook + tests
+- [ ] **B4.6** Drift warning: saved layers/fields no longer in the service
+- [ ] **B4.7** Error handling, session timeout UX
+- [ ] **B4.8** Decide and design the second kind (brain session) before any build

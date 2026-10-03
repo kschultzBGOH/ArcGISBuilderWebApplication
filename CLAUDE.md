@@ -206,6 +206,9 @@ hook class per layer. **The server never runs PHP text from a profile or the bro
 /CLAUDE.md
 /docs/
   TASKS.md
+  PLAN.md                      <- full plan (identical in both repos)
+  ISSUES.md                    <- issue register (identical in both repos)
+  REQUIREMENTS.md              <- requirement ids cited by the plan (identical in both repos)
   CONFIG_OUTPUT_SCHEMA.md      <- profile JSON contract with the widget (only definition)
   DEPLOYMENT.md                <- IIS + PHP FastCGI, app pool identity, share access, OAuth app, widget hosting + CORS, Portal registration
 /app/
